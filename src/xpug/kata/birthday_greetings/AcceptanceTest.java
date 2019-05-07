@@ -13,46 +13,76 @@ import com.dumbster.smtp.SmtpMessage;
 
 public class AcceptanceTest {
 
-	private static final int NONSTANDARD_PORT = 3003;
-	private SimpleSmtpServer server;
-	private Iterator<SmtpMessage> emailIterator;
+	private BirthdayService service;
+	private GreetingsMessageSender greetingsMessageSender;
+	private EmployeeRepository employeeRepository;
 
 	@Before
-	public void setUp() {
-		server = SimpleSmtpServer.start(NONSTANDARD_PORT);
+	public void setUp() throws Exception {
+		
+		final int SMTP_PORT = 25;
+		final String SENDER = "sender@here.com";
+		final String SMTP_HOST = "localhost";
+
+		final String employeesDataFile = "repositories/employee_data.txt";
+
+		greetingsMessageSender = new FakeGreetingsEmailSender(SMTP_HOST,
+				SMTP_PORT, SENDER);
+
+		try {
+			employeeRepository = new FileEmployeeRepository(employeesDataFile);
+			service = new BirthdayService(greetingsMessageSender,employeeRepository);
+		} catch (EmployeesRepositoryAccessException e) {
+			/* Esto lo puse para comprobar porque estaba fallando la lectura desde el fichero
+			 * repositorio de empleados cuando comence las pruebas con Maven. Quizas mejor quitarlo en un test
+			 */
+			System.err
+					.println("EmployeesRepositoryAccessException creating employeeRepository from '"
+							+ employeesDataFile + "'");
+			throw e;
+		}
 	}
-	
-	@After
-	public void tearDown() {
-		server.stop();
-	}
-	
+
 	@Test
 	public void baseScenario() throws Exception {
-		startBirthdayServiceFor("employee_data.txt", "2008/10/08");
+		OurDate baseDate = new OurDate("2012/10/08");
+		List<GreetingsMessage> greetingMessagesSent;
 		
-		expectNumberOfEmailSentIs(1);
-		expectEmailWithSubject_andBody_sentTo("Happy Birthday!", "Happy Birthday, dear John!", "john.doe@foobar.com");
+		service.sendGreetings(baseDate);
+
+		greetingMessagesSent = ((FakeGreetingsEmailSender) greetingsMessageSender)
+				.getGreetingsMessagesSent();
+		
+		
+		/* He cambiado la forma de hacer el test:
+		 * Ahora en lugar de comprobar datos dede Message (javax.mail), comprobamos la info
+		 * basandonos en un GreetingMessage que es parte de nuestro core 
+		 */
+
+		assertEquals("message not sent?", 1, greetingMessagesSent.size());
+		GreetingsMessage greetingMessage = greetingMessagesSent.get(0);
+
+		assertEquals("Happy Birthday!", greetingMessage.getSubject());
+		assertEquals("Happy Birthday, dear John!", greetingMessage.getBody());
+		assertEquals("john.doe@foobar.com", greetingMessage.getRecipient());
+
 	}
 
-	private void expectEmailWithSubject_andBody_sentTo(String subject, String body, String recipient) {
-		SmtpMessage message = emailIterator.next();
-		assertEquals(body, message.getBody());
-		assertEquals(subject, message.getHeaderValue("Subject"));
-		assertEquals(recipient, message.getHeaderValue("To"));		
-	}
+	@Test
+	public void willNotSendEmailsWhenNobodysBirthday() throws Exception {
+		OurDate nobodysBirthdayDate = new OurDate("2008/01/01");
+		List<GreetingsMessage> greetingsMessagesSent;
+		int numberSendedGreetingMessages;
+		int expectedNumberSendedGreetingMessages = 0;
+		
+		
+		service.sendGreetings(nobodysBirthdayDate);
+		greetingsMessagesSent = ((FakeGreetingsEmailSender) greetingsMessageSender)
+				.getGreetingsMessagesSent();
+		numberSendedGreetingMessages = greetingsMessagesSent.size();
 
-	private void expectNumberOfEmailSentIs(int expected) {
-		assertEquals(expected, server.getReceivedEmailSize());
+		assertEquals("what? messages?", expectedNumberSendedGreetingMessages, numberSendedGreetingMessages);
 	}
-
-	@SuppressWarnings("unchecked")
-	private void startBirthdayServiceFor(String employeeFileName, String date) throws Exception {
-		BirthdayService service = new BirthdayService();
-		service.sendGreetings(employeeFileName, new OurDate(date), "localhost", NONSTANDARD_PORT);
-		emailIterator = server.getReceivedEmail();
-	}
-	
 	
 
 }

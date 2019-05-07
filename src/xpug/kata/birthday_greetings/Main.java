@@ -21,7 +21,8 @@ public class Main {
 			String subject = request.queryParams("subject");
 			String body = request.queryParams("body");
 			BirthdayService service = new BirthdayService();
-			service.sendGreetings("employee_data.txt", new OurDate("2008/10/08"), "localhost", 1081);
+			EmailService mail = new SMTPMailService("localhost", 1081);
+			service.sendGreetings("employee_data.txt", new OurDate("2008/10/08"), mail);
 			server.stop();
 			return "<h2>Emails sent: "+service.quantityOfGreetingsSent()+"</h2>";
 		});
