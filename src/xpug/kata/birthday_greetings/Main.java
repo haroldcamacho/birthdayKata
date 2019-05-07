@@ -10,6 +10,7 @@ import com.dumbster.smtp.SimpleSmtpServer;
 import com.dumbster.smtp.SmtpMessage;
 
 import spark.Request;
+import spark.Route;
 
 public class Main {
 	public static void main(String[] args) {
@@ -20,13 +21,15 @@ public class Main {
 			String from = request.queryParams("from");
 			String subject = request.queryParams("subject");
 			String body = request.queryParams("body");
-			BirthdayService service = new BirthdayService();
+			GreetingsMessage message = new GreetingsMessage(subject, body, from);
+			BirthdayService service = new BirthdayService(null, null);
 			EmailService mail = new SMTPMailService("localhost", 1081);
-			service.sendGreetings("employee_data.txt", new OurDate("2008/10/08"), mail);
+			service.sendGreetings(new OurDate("2008/10/08"));
 			server.stop();
-			return "<h2>Emails sent: "+service.quantityOfGreetingsSent()+"</h2>";
 		});
 	}
+
+
 
 	private static String sendGreetingsView() {
 		return "<html>"

@@ -3,6 +3,7 @@ package xpug.kata.birthday_greetings;
 import static org.junit.Assert.*;
 
 import java.util.Iterator;
+import java.util.List;
 
 import org.junit.After;
 import org.junit.Before;
@@ -14,8 +15,11 @@ import com.dumbster.smtp.SmtpMessage;
 public class AcceptanceTest {
 
 	private BirthdayService service;
+	private static final int NONSTANDARD_PORT = 3003;
+	SimpleSmtpServer server;
 	private GreetingsMessageSender greetingsMessageSender;
 	private EmployeeRepository employeeRepository;
+	private Iterator emailIterator;
 
 	@Before
 	public void setUp() throws Exception {
@@ -26,16 +30,13 @@ public class AcceptanceTest {
 
 		final String employeesDataFile = "repositories/employee_data.txt";
 
-		greetingsMessageSender = new FakeGreetingsEmailSender(SMTP_HOST,
-				SMTP_PORT, SENDER);
+		greetingsMessageSender = new FakeGreetingsEmailSender(SMTP_HOST, SMTP_PORT, SENDER);
 
 		try {
 			employeeRepository = new FileEmployeeRepository(employeesDataFile);
 			service = new BirthdayService(greetingsMessageSender,employeeRepository);
 		} catch (EmployeesRepositoryAccessException e) {
-			/* Esto lo puse para comprobar porque estaba fallando la lectura desde el fichero
-			 * repositorio de empleados cuando comence las pruebas con Maven. Quizas mejor quitarlo en un test
-			 */
+			
 			System.err
 					.println("EmployeesRepositoryAccessException creating employeeRepository from '"
 							+ employeesDataFile + "'");
@@ -45,44 +46,30 @@ public class AcceptanceTest {
 
 	@Test
 	public void baseScenario() throws Exception {
-		OurDate baseDate = new OurDate("2012/10/08");
-		List<GreetingsMessage> greetingMessagesSent;
+		startBirthdayServiceFor("employee_data.txt", "2008/10/08");
 		
-		service.sendGreetings(baseDate);
-
-		greetingMessagesSent = ((FakeGreetingsEmailSender) greetingsMessageSender)
-				.getGreetingsMessagesSent();
-		
-		
-		/* He cambiado la forma de hacer el test:
-		 * Ahora en lugar de comprobar datos dede Message (javax.mail), comprobamos la info
-		 * basandonos en un GreetingMessage que es parte de nuestro core 
-		 */
-
-		assertEquals("message not sent?", 1, greetingMessagesSent.size());
-		GreetingsMessage greetingMessage = greetingMessagesSent.get(0);
-
-		assertEquals("Happy Birthday!", greetingMessage.getSubject());
-		assertEquals("Happy Birthday, dear John!", greetingMessage.getBody());
-		assertEquals("john.doe@foobar.com", greetingMessage.getRecipient());
-
+		expectNumberOfEmailSentIs(1);
+		expectEmailWithSubject_andBody_sentTo("Happy Birthday!", "Happy Birthday, dear John!", "john.doe@foobar.com");
 	}
 
-	@Test
-	public void willNotSendEmailsWhenNobodysBirthday() throws Exception {
-		OurDate nobodysBirthdayDate = new OurDate("2008/01/01");
-		List<GreetingsMessage> greetingsMessagesSent;
-		int numberSendedGreetingMessages;
-		int expectedNumberSendedGreetingMessages = 0;
-		
-		
-		service.sendGreetings(nobodysBirthdayDate);
-		greetingsMessagesSent = ((FakeGreetingsEmailSender) greetingsMessageSender)
-				.getGreetingsMessagesSent();
-		numberSendedGreetingMessages = greetingsMessagesSent.size();
-
-		assertEquals("what? messages?", expectedNumberSendedGreetingMessages, numberSendedGreetingMessages);
+	private void expectEmailWithSubject_andBody_sentTo(String subject, String body, String recipient) {
+		SmtpMessage message = (SmtpMessage) emailIterator.next();
+		assertEquals(body, message.getBody());
+		assertEquals(subject, message.getHeaderValue("Subject"));
+		assertEquals(recipient, message.getHeaderValue("To"));		
 	}
-	
+
+	private void expectNumberOfEmailSentIs(int expected) {
+		assertEquals(expected, server.getReceivedEmailSize());
+	}
+
+	@SuppressWarnings("unchecked")
+	private void startBirthdayServiceFor(String employeeFileName, String date) throws Exception {
+		BirthdayService service = new BirthdayService(greetingsMessageSender, employeeRepository);
+		EmailService mail = new SMTPMailService("localhost", NONSTANDARD_PORT);
+		service.sendGreetings(new OurDate(date));
+		emailIterator = server.getReceivedEmail();
+	}
+
 
 }

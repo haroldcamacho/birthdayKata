@@ -1,5 +1,7 @@
 package xpug.kata.birthday_greetings;
 
-public interface EmployeeRepository {
+import java.util.List;
 
+public interface EmployeeRepository {
+	public List<Employee> getEmployees();
 }
